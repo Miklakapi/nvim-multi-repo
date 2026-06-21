@@ -38,6 +38,10 @@ return {
     },
     config = function()
         require("multi_repo").setup()
+
+        vim.keymap.set("n", "<leader>pr", "<cmd>MultiRepo<cr>", {
+            desc = "Open project repositories",
+        })
     end,
 }
 ```
@@ -77,6 +81,10 @@ return {
                     vim.api.nvim_win_close(temporary_window, true)
                 end
             end,
+        })
+
+        vim.keymap.set("n", "<leader>pr", "<cmd>MultiRepo<cr>", {
+            desc = "Open project repositories",
         })
     end,
 }
