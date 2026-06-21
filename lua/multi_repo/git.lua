@@ -1,18 +1,18 @@
 local Git = {}
 
 local function normalize_path(path)
-    return vim.fn.fnamemodify(path, ":p"):gsub("/$", "")
+    return vim.fn.fnamemodify(path or vim.fn.getcwd(), ":p"):gsub("/$", "")
 end
 
 local function run_git_command(path, arguments, options)
-    local normalized_path = normalize_path(path or vim.fn.getcwd())
+    local normalized_path = normalize_path(path)
     local command = {
         "git",
         "-C",
         normalized_path,
     }
 
-    for _, argument in ipairs(arguments) do
+    for _, argument in ipairs(arguments or {}) do
         table.insert(command, argument)
     end
 
@@ -34,8 +34,15 @@ local function run_git_command(path, arguments, options)
     return result
 end
 
+local function strip_branch_tracking_info(branch_part)
+    return branch_part
+        :gsub("%s*%[.*%]$", "")
+        :gsub("%.%.%..*$", "")
+        :gsub("%s+$", "")
+end
+
 local function parse_branch_name(branch_part)
-    if branch_part == "" then
+    if not branch_part or branch_part == "" then
         return nil
     end
 
@@ -43,9 +50,9 @@ local function parse_branch_name(branch_part)
         return "detached"
     end
 
-    local branch_name = branch_part:match("^([^%.%s%[]+)")
+    local branch_name = strip_branch_tracking_info(branch_part)
 
-    if not branch_name or branch_name == "" then
+    if branch_name == "" then
         return nil
     end
 
@@ -64,16 +71,18 @@ local function parse_branch_status(line)
     }
 end
 
+local function is_conflict_status(index_status, worktree_status, combined_status)
+    return index_status == "U"
+        or worktree_status == "U"
+        or combined_status == "AA"
+        or combined_status == "DD"
+end
+
 local function parse_file_status(line)
     local index_status = line:sub(1, 1)
     local worktree_status = line:sub(2, 2)
     local combined_status = line:sub(1, 2)
-
     local is_untracked = combined_status == "??"
-    local is_conflicted = index_status == "U"
-        or worktree_status == "U"
-        or combined_status == "AA"
-        or combined_status == "DD"
 
     return {
         index_status = index_status,
@@ -83,7 +92,7 @@ local function parse_file_status(line)
         is_staged = not is_untracked and index_status ~= " " and index_status ~= "?",
         is_changed = not is_untracked and worktree_status ~= " " and worktree_status ~= "?",
         is_untracked = is_untracked,
-        is_conflicted = is_conflicted,
+        is_conflicted = is_conflict_status(index_status, worktree_status, combined_status),
 
         is_added = index_status == "A" or worktree_status == "A",
         is_modified = index_status == "M" or worktree_status == "M",
@@ -114,42 +123,23 @@ local function create_empty_status()
     }
 end
 
+local function increment_status_count(status, key, should_increment)
+    if should_increment then
+        status[key] = status[key] + 1
+    end
+end
+
 local function update_status_counts(status, file_status)
-    if file_status.is_staged then
-        status.staged_count = status.staged_count + 1
-    end
+    increment_status_count(status, "staged_count", file_status.is_staged)
+    increment_status_count(status, "changed_count", file_status.is_changed)
+    increment_status_count(status, "untracked_count", file_status.is_untracked)
+    increment_status_count(status, "conflict_count", file_status.is_conflicted)
 
-    if file_status.is_changed then
-        status.changed_count = status.changed_count + 1
-    end
-
-    if file_status.is_untracked then
-        status.untracked_count = status.untracked_count + 1
-    end
-
-    if file_status.is_conflicted then
-        status.conflict_count = status.conflict_count + 1
-    end
-
-    if file_status.is_added then
-        status.added_count = status.added_count + 1
-    end
-
-    if file_status.is_modified then
-        status.modified_count = status.modified_count + 1
-    end
-
-    if file_status.is_deleted then
-        status.deleted_count = status.deleted_count + 1
-    end
-
-    if file_status.is_renamed then
-        status.renamed_count = status.renamed_count + 1
-    end
-
-    if file_status.is_copied then
-        status.copied_count = status.copied_count + 1
-    end
+    increment_status_count(status, "added_count", file_status.is_added)
+    increment_status_count(status, "modified_count", file_status.is_modified)
+    increment_status_count(status, "deleted_count", file_status.is_deleted)
+    increment_status_count(status, "renamed_count", file_status.is_renamed)
+    increment_status_count(status, "copied_count", file_status.is_copied)
 end
 
 local function finalize_status(status)
@@ -181,6 +171,49 @@ local function get_log_lines(path)
     }, {
         allow_error = true,
     })
+end
+
+local function apply_branch_status(status, line)
+    local branch_status = parse_branch_status(line)
+
+    status.branch = branch_status.branch
+    status.ahead = branch_status.ahead
+    status.behind = branch_status.behind
+end
+
+local function apply_file_status(status, line)
+    local file_status = parse_file_status(line)
+
+    update_status_counts(status, file_status)
+end
+
+local function build_preview_lines(status_lines, log_lines)
+    local lines = {}
+
+    table.insert(lines, "Status")
+    table.insert(lines, "------")
+
+    if #status_lines == 0 then
+        table.insert(lines, "No status available")
+    else
+        for _, line in ipairs(status_lines) do
+            table.insert(lines, line)
+        end
+    end
+
+    table.insert(lines, "")
+    table.insert(lines, "Recent commits")
+    table.insert(lines, "--------------")
+
+    if #log_lines == 0 then
+        table.insert(lines, "No commits available")
+    else
+        for _, line in ipairs(log_lines) do
+            table.insert(lines, line)
+        end
+    end
+
+    return lines
 end
 
 function Git.normalize_path(path)
@@ -216,50 +249,26 @@ function Git.get_status(path)
 
     for _, line in ipairs(result) do
         if line:match("^##") then
-            local branch_status = parse_branch_status(line)
-
-            status.branch = branch_status.branch
-            status.ahead = branch_status.ahead
-            status.behind = branch_status.behind
+            apply_branch_status(status, line)
         else
-            local file_status = parse_file_status(line)
-
-            update_status_counts(status, file_status)
+            apply_file_status(status, line)
         end
     end
 
     return finalize_status(status)
 end
 
+function Git.get_preview_data(path)
+    return {
+        status_lines = get_status_lines(path) or {},
+        log_lines = get_log_lines(path) or {},
+    }
+end
+
 function Git.get_preview(path)
-    local status_result = get_status_lines(path) or {}
-    local log_result = get_log_lines(path) or {}
-    local lines = {}
+    local preview_data = Git.get_preview_data(path)
 
-    table.insert(lines, "Status")
-    table.insert(lines, "------")
-
-    if #status_result == 0 then
-        table.insert(lines, "No status available")
-    else
-        for _, line in ipairs(status_result) do
-            table.insert(lines, line)
-        end
-    end
-
-    table.insert(lines, "")
-    table.insert(lines, "Recent commits")
-    table.insert(lines, "--------------")
-
-    if #log_result == 0 then
-        table.insert(lines, "No commits available")
-    else
-        for _, line in ipairs(log_result) do
-            table.insert(lines, line)
-        end
-    end
-
-    return lines
+    return build_preview_lines(preview_data.status_lines, preview_data.log_lines)
 end
 
 return Git
