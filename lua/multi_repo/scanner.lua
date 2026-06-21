@@ -104,14 +104,19 @@ local function is_git_repository(path)
 end
 
 local function create_include_paths(root_path, config)
+    ---@type string[]
     local include_paths = {}
 
     for _, include_dir in ipairs(config.include_dirs or {}) do
+        local include_path
+
         if is_absolute_path(include_dir) then
-            table.insert(include_paths, normalize_path(include_dir))
+            include_path = normalize_path(include_dir)
         else
-            table.insert(include_paths, normalize_path(join_path(root_path, include_dir)))
+            include_path = normalize_path(join_path(root_path, include_dir))
         end
+
+        table.insert(include_paths, include_path)
     end
 
     return include_paths
