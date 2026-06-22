@@ -4,6 +4,10 @@ A lightweight Neovim fuzzy picker for nested, symlinked and multi-repository Git
 
 `nvim-multi-repo` finds Git repositories inside the current project and lets you choose one from a Telescope picker.
 
+<p align="center">
+  <img src="./assets/demo.gif" alt="nvim-multi-repo demo" />
+</p>
+
 It is useful when a project contains multiple repositories, for example:
 
 * nested Git repositories
