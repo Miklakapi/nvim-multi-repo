@@ -252,6 +252,40 @@ local function get_display_widths()
     }
 end
 
+local function shorten_path_from_left(path, max_width)
+    if not path or path == "" then
+        return ""
+    end
+
+    if #path <= max_width then
+        return path
+    end
+
+    if max_width <= 1 then
+        return "…"
+    end
+
+    local shortened_path = path
+
+    while #shortened_path > max_width do
+        local next_separator_index = shortened_path:find("/")
+
+        if not next_separator_index then
+            break
+        end
+
+        shortened_path = shortened_path:sub(next_separator_index + 1)
+    end
+
+    shortened_path = "…/" .. shortened_path
+
+    if #shortened_path <= max_width then
+        return shortened_path
+    end
+
+    return "…" .. shortened_path:sub(#shortened_path - max_width + 2)
+end
+
 local function create_display_maker()
     local entry_display = require("telescope.pickers.entry_display")
     local display_widths = get_display_widths()
@@ -277,11 +311,12 @@ local function create_display_maker()
     return function(entry)
         local repository = entry.value
         local status = repository.status or {}
+        local path = repository.display_path or repository.name or ""
         local branch = status.branch or "detached"
         local sync = get_sync_label(repository)
 
         return displayer({
-            repository.display_path or repository.name or "",
+            shorten_path_from_left(path, display_widths.path),
             {
                 branch,
                 "MultiRepoRepositoryBranch",
