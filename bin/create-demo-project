@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+get_project_root() {
+    local script_dir
+
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+    cd "$script_dir/.."
+    pwd
+}
+
+create_file() {
+    local file_path="$1"
+    local file_content="$2"
+
+    mkdir -p "$(dirname "$file_path")"
+    printf "%s\n" "$file_content" >"$file_path"
+}
+
+init_repo() {
+    local repo_path="$1"
+    local readme_title="$2"
+
+    mkdir -p "$repo_path"
+
+    git -C "$repo_path" init -q
+    git -C "$repo_path" config user.name "nvim-multi-repo test"
+    git -C "$repo_path" config user.email "nvim-multi-repo-test@example.local"
+
+    create_file "$repo_path/README.md" "# $readme_title"
+
+    git -C "$repo_path" add README.md
+    git -C "$repo_path" commit -q -m "Initial commit"
+}
+
+create_dirty_file() {
+    local file_path="$1"
+    local file_content="$2"
+
+    create_file "$file_path" "$file_content"
+}
+
+create_demo_project() {
+    local project_root
+    local demo_root
+    local target_dir
+    local external_dir
+    local submodule_source_dir
+
+    project_root="$(get_project_root)"
+    demo_root="$project_root/.demo"
+    target_dir="$demo_root/nvim-multi-repo-demo"
+    external_dir="$demo_root/nvim-multi-repo-external"
+    submodule_source_dir="$demo_root/nvim-multi-repo-submodule-source"
+
+    rm -rf "$target_dir" "$external_dir" "$submodule_source_dir"
+
+    init_repo "$target_dir" "Root demo project"
+    init_repo "$target_dir/packages/internal-package" "Internal package"
+    init_repo "$target_dir/apps/admin" "Admin app"
+    init_repo "$external_dir/shared-package" "External shared package"
+    init_repo "$submodule_source_dir/local-submodule" "Local submodule"
+
+    mkdir -p "$target_dir/packages"
+
+    ln -s "$external_dir/shared-package" "$target_dir/packages/symlinked-package"
+
+    git -C "$target_dir" -c protocol.file.allow=always submodule add -q "$submodule_source_dir/local-submodule" "modules/local-submodule"
+
+    create_file "$target_dir/packages/internal-package/src/index.lua" "return { name = 'internal-package' }"
+    create_file "$target_dir/apps/admin/src/index.lua" "return { name = 'admin-app' }"
+    create_file "$external_dir/shared-package/src/index.lua" "return { name = 'shared-package' }"
+    create_file "$target_dir/modules/local-submodule/src/index.lua" "return { name = 'local-submodule' }"
+
+    git -C "$target_dir/packages/internal-package" add src/index.lua
+    git -C "$target_dir/packages/internal-package" commit -q -m "Add package source"
+
+    git -C "$target_dir/apps/admin" add src/index.lua
+    git -C "$target_dir/apps/admin" commit -q -m "Add admin source"
+
+    git -C "$external_dir/shared-package" add src/index.lua
+    git -C "$external_dir/shared-package" commit -q -m "Add shared source"
+
+    git -C "$target_dir/modules/local-submodule" add src/index.lua
+    git -C "$target_dir/modules/local-submodule" commit -q -m "Add submodule source"
+
+    git -C "$target_dir" add .gitmodules modules/local-submodule packages/symlinked-package
+    git -C "$target_dir" commit -q -m "Add local submodule and symlinked package"
+
+    create_dirty_file "$target_dir/packages/internal-package/dirty-file.txt" "This file makes the internal package dirty"
+    create_dirty_file "$target_dir/apps/admin/untracked-file.txt" "This file should be detected as untracked"
+
+    printf "\nDemo project created:\n"
+    printf "  %s\n\n" "$target_dir"
+
+    printf "Expected repositories:\n"
+    printf "  %s\n" "$target_dir"
+    printf "  %s\n" "$target_dir/packages/internal-package"
+    printf "  %s\n" "$target_dir/apps/admin"
+    printf "  %s\n" "$target_dir/modules/local-submodule"
+    printf "  %s -> %s\n\n" "$target_dir/packages/symlinked-package" "$external_dir/shared-package"
+
+    printf "Open demo project:\n"
+    printf "  cd %s\n" "$target_dir"
+    printf "  nvim\n\n"
+
+    printf "Then run your plugin command, for example:\n"
+    printf "  :MultiRepo\n\n"
+}
+
+create_demo_project
