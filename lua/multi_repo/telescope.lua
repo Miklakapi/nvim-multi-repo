@@ -210,10 +210,10 @@ local function create_display_maker()
         separator = " ",
         items = {
             {
-                width = 42,
+                width = 55,
             },
             {
-                width = 22,
+                width = 16,
             },
             {
                 width = 10,
