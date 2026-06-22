@@ -28,7 +28,7 @@ local default_config = {
         layout_config = {
             width = 0.9,
             height = 0.75,
-            preview_width = 0.55,
+            preview_width = 0.45,
         },
 
         status = {

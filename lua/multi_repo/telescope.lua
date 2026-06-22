@@ -203,23 +203,73 @@ local function highlight_preview(buffer_id, lines)
     end
 end
 
+local function clamp(value, min_value, max_value)
+    return math.max(min_value, math.min(value, max_value))
+end
+
+local function get_picker_width()
+    local telescope_config = get_telescope_config()
+    local layout_config = telescope_config.layout_config or {}
+    local configured_width = layout_config.width or 0.9
+    local columns = vim.o.columns
+
+    if configured_width <= 1 then
+        return math.floor(columns * configured_width)
+    end
+
+    return math.min(configured_width, columns)
+end
+
+local function get_results_width()
+    local telescope_config = get_telescope_config()
+    local layout_config = telescope_config.layout_config or {}
+    local picker_width = get_picker_width()
+    local preview_width = layout_config.preview_width or 0.55
+
+    if preview_width <= 1 then
+        return math.floor(picker_width * (1 - preview_width))
+    end
+
+    return math.max(picker_width - preview_width, 20)
+end
+
+local function get_display_widths()
+    local results_width = get_results_width()
+
+    local branch_width = clamp(math.floor(results_width * 0.24), 8, 16)
+    local status_width = clamp(math.floor(results_width * 0.15), 5, 10)
+    local sync_width = clamp(math.floor(results_width * 0.12), 4, 8)
+
+    local separator_width = 3
+    local reserved_width = branch_width + status_width + sync_width + separator_width
+    local path_width = math.max(results_width - reserved_width, 12)
+
+    return {
+        path = path_width,
+        branch = branch_width,
+        status = status_width,
+        sync = sync_width,
+    }
+end
+
 local function create_display_maker()
     local entry_display = require("telescope.pickers.entry_display")
+    local display_widths = get_display_widths()
 
     local displayer = entry_display.create({
         separator = " ",
         items = {
             {
-                width = 55,
+                width = display_widths.path,
             },
             {
-                width = 16,
+                width = display_widths.branch,
             },
             {
-                width = 10,
+                width = display_widths.status,
             },
             {
-                remaining = true,
+                width = display_widths.sync,
             },
         },
     })
@@ -322,7 +372,7 @@ function Telescope.open(repositories)
         layout_config = telescope_config.layout_config or {
             width = 0.9,
             height = 0.75,
-            preview_width = 0.55,
+            preview_width = 0.45,
         },
 
         finder = create_finder(repositories),
