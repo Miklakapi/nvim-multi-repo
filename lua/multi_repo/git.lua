@@ -314,6 +314,28 @@ function Git.get_root(path)
     return normalize_path(result[1])
 end
 
+--- Parses raw `git status --short --branch` lines.
+---
+---@param lines string[]|nil Raw status lines.
+---@return MultiRepoGitStatus status Parsed repository status.
+function Git.parse_status_lines(lines)
+    local status = create_empty_status()
+
+    for _, line in ipairs(lines or {}) do
+        if line:match("^##") then
+            local branch_status = parse_branch_status(line)
+
+            status.branch = branch_status.branch
+            status.ahead = branch_status.ahead
+            status.behind = branch_status.behind
+        elseif line ~= "" then
+            update_status_counts(status, parse_file_status(line))
+        end
+    end
+
+    return finalize_status(status)
+end
+
 --- Returns parsed repository status information.
 ---
 --- The status is based on `git status --short --branch`.
@@ -321,26 +343,7 @@ end
 ---@param path string|nil Path inside a Git repository. Defaults to the current working directory.
 ---@return MultiRepoGitStatus status Parsed repository status.
 function Git.get_status(path)
-    local result = get_status_lines(path)
-    local status = create_empty_status()
-
-    if not result then
-        return status
-    end
-
-    for _, line in ipairs(result) do
-        if line:match("^##") then
-            local branch_status = parse_branch_status(line)
-
-            status.branch = branch_status.branch
-            status.ahead = branch_status.ahead
-            status.behind = branch_status.behind
-        else
-            update_status_counts(status, parse_file_status(line))
-        end
-    end
-
-    return finalize_status(status)
+    return Git.parse_status_lines(get_status_lines(path))
 end
 
 --- Returns raw Git preview data for a repository.
