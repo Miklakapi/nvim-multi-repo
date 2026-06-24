@@ -20,6 +20,7 @@ It is useful when a project contains multiple repositories, for example:
 * Finds multiple Git repositories in one project
 * Supports nested repositories, submodules and symlinks
 * Uses Telescope as the picker UI
+* Opens quickly and loads repository status in the background
 * Shows branch, clean/dirty state and ahead/behind info
 * Shows Git status and recent commits in preview
 * Lets you define what happens after selecting a repository
@@ -59,6 +60,8 @@ Run:
 ```
 
 Select a repository from the Telescope picker.
+
+Repository status is loaded asynchronously, so the picker can open immediately even in large multi-repository workspaces.
 
 By default, the plugin only shows a notification with the selected repository. Use `on_select` to define your own action.
 
@@ -100,19 +103,21 @@ This opens Fugitive for the selected repository.
 
 ```lua
 require("multi_repo").setup({
-    max_depth = 4,
-    follow_symlinks = true,
+    scanner = {
+        max_depth = 4,
+        follow_symlinks = true,
 
-    ignored_dirs = {
-        ".git",
-        "node_modules",
-        "vendor",
-        "dist",
-        "build",
-        ".cache",
+        ignored_dirs = {
+            ".git",
+            "node_modules",
+            "vendor",
+            "dist",
+            "build",
+            ".cache",
+        },
+
+        include_dirs = {},
     },
-
-    include_dirs = {},
 
     on_select = function(repository)
         vim.notify(
@@ -127,7 +132,7 @@ require("multi_repo").setup({
         layout_config = {
             width = 0.9,
             height = 0.75,
-            preview_width = 0.55,
+            preview_width = 0.45,
         },
     },
 })
@@ -135,13 +140,15 @@ require("multi_repo").setup({
 
 ## Include extra directories
 
-Use `include_dirs` when some repositories are outside the normal scan depth or inside ignored directories.
+Use `scanner.include_dirs` when some repositories are outside the normal scan depth or inside ignored directories.
 
 ```lua
 require("multi_repo").setup({
-    include_dirs = {
-        "packages/custom-package",
-        "/absolute/path/to/another/repo",
+    scanner = {
+        include_dirs = {
+            "packages/custom-package",
+            "/absolute/path/to/another/repo",
+        },
     },
 })
 ```
@@ -194,8 +201,16 @@ The `on_select` callback receives a repository object:
         staged_count = 0,
         untracked_count = 2,
         conflict_count = 0,
+        added_count = 0,
+        modified_count = 1,
+        deleted_count = 0,
+        renamed_count = 0,
+        copied_count = 0,
         ahead = 0,
         behind = 0,
     },
 }
 ```
+
+`status` is loaded asynchronously and may be `nil` when the repository is selected before background status loading finishes.
+
