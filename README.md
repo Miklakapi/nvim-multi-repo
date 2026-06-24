@@ -23,6 +23,7 @@ It is useful when a project contains multiple repositories, for example:
 * Opens quickly and loads repository status in the background
 * Shows branch, clean/dirty state and ahead/behind info
 * Shows Git status and recent commits in preview
+* Can fetch or pull all discovered repositories
 * Lets you define what happens after selecting a repository
 
 ## Requirements
@@ -44,8 +45,16 @@ return {
     config = function()
         require("multi_repo").setup()
 
-        vim.keymap.set("n", "<leader>pr", "<cmd>MultiRepo<cr>", {
-            desc = "Open project repositories",
+        vim.keymap.set("n", "<leader>mr", "<cmd>MultiRepo<cr>", {
+            desc = "Open multi-repo picker",
+        })
+
+        vim.keymap.set("n", "<leader>mf", "<cmd>MultiRepoFetch<cr>", {
+            desc = "Fetch multi-repo repositories",
+        })
+
+        vim.keymap.set("n", "<leader>ml", "<cmd>MultiRepoPull<cr>", {
+            desc = "Pull multi-repo repositories",
         })
     end,
 }
@@ -64,6 +73,22 @@ Select a repository from the Telescope picker.
 Repository status is loaded asynchronously, so the picker can open immediately even in large multi-repository workspaces.
 
 By default, the plugin only shows a notification with the selected repository. Use `on_select` to define your own action.
+
+To update discovered repositories, run:
+
+```vim
+:MultiRepoFetch
+```
+
+or:
+
+```vim
+:MultiRepoPull
+```
+
+`:MultiRepoFetch` runs `git fetch --all --prune` for discovered repositories.
+
+`:MultiRepoPull` runs `git pull --ff-only` for discovered repositories and shows a summary when it finishes.
 
 ## Example with vim-fugitive
 
@@ -90,8 +115,16 @@ return {
             end,
         })
 
-        vim.keymap.set("n", "<leader>pr", "<cmd>MultiRepo<cr>", {
-            desc = "Open project repositories",
+        vim.keymap.set("n", "<leader>mr", "<cmd>MultiRepo<cr>", {
+            desc = "Open multi-repo picker",
+        })
+
+        vim.keymap.set("n", "<leader>mf", "<cmd>MultiRepoFetch<cr>", {
+            desc = "Fetch multi-repo repositories",
+        })
+
+        vim.keymap.set("n", "<leader>ml", "<cmd>MultiRepoPull<cr>", {
+            desc = "Pull multi-repo repositories",
         })
     end,
 }
@@ -117,6 +150,21 @@ require("multi_repo").setup({
         },
 
         include_dirs = {},
+    },
+
+    updater = {
+        concurrency = 2,
+
+        fetch_args = {
+            "fetch",
+            "--all",
+            "--prune",
+        },
+
+        pull_args = {
+            "pull",
+            "--ff-only",
+        },
     },
 
     on_select = function(repository)
@@ -148,6 +196,42 @@ require("multi_repo").setup({
         include_dirs = {
             "packages/custom-package",
             "/absolute/path/to/another/repo",
+        },
+    },
+})
+```
+
+## Customize updater commands
+
+By default, `:MultiRepoFetch` runs:
+
+```bash
+git fetch --all --prune
+```
+
+and `:MultiRepoPull` runs:
+
+```bash
+git pull --ff-only
+```
+
+You can customize the Git arguments:
+
+```lua
+require("multi_repo").setup({
+    updater = {
+        concurrency = 2,
+
+        fetch_args = {
+            "fetch",
+            "--all",
+            "--prune",
+        },
+
+        pull_args = {
+            "pull",
+            "--ff-only",
+            "--autostash",
         },
     },
 })

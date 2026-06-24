@@ -2,6 +2,7 @@ local Config = require("multi_repo.config")
 local Git = require("multi_repo.git")
 local Scanner = require("multi_repo.scanner")
 local Telescope = require("multi_repo.telescope")
+local Updater = require("multi_repo.updater")
 
 local MultiRepo = {}
 
@@ -23,6 +24,14 @@ function MultiRepo.setup(user_config)
 
     vim.api.nvim_create_user_command("MultiRepo", function()
         open_picker()
+    end, {})
+
+    vim.api.nvim_create_user_command("MultiRepoFetch", function()
+        Updater.fetch()
+    end, {})
+
+    vim.api.nvim_create_user_command("MultiRepoPull", function()
+        Updater.pull()
     end, {})
 end
 

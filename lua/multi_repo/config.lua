@@ -18,6 +18,11 @@ local Config = {}
 ---@field ignored_dirs string[]
 ---@field include_dirs string[]
 
+---@class MultiRepoUpdaterConfig
+---@field concurrency integer
+---@field fetch_args string[]
+---@field pull_args string[]
+
 ---@class MultiRepoTelescopeLayoutConfig
 ---@field width number|integer|nil
 ---@field height number|integer|nil
@@ -31,6 +36,7 @@ local Config = {}
 
 ---@class MultiRepoConfig
 ---@field scanner MultiRepoScannerConfig
+---@field updater MultiRepoUpdaterConfig
 ---@field on_select fun(repository: MultiRepoRepository)|nil
 ---@field telescope MultiRepoTelescopeConfig
 
@@ -50,6 +56,21 @@ local default_config = {
         },
 
         include_dirs = {},
+    },
+
+    updater = {
+        concurrency = 2,
+
+        fetch_args = {
+            "fetch",
+            "--all",
+            "--prune",
+        },
+
+        pull_args = {
+            "pull",
+            "--ff-only",
+        },
     },
 
     on_select = function(repository)
