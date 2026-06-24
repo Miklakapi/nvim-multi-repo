@@ -1,8 +1,16 @@
 local Git = {}
 
+-- Path helpers
+
 local function normalize_path(path)
-    return vim.fn.fnamemodify(path or vim.fn.getcwd(), ":p"):gsub("/$", "")
+    local fallback_path = path or vim.fn.getcwd()
+    local absolute_path = vim.fn.fnamemodify(fallback_path, ":p")
+    local normalized_path = absolute_path:gsub("/$", "")
+
+    return normalized_path
 end
+
+-- Command execution
 
 local function run_git_command(path, arguments, options)
     local normalized_path = normalize_path(path)
@@ -33,6 +41,8 @@ local function run_git_command(path, arguments, options)
 
     return result
 end
+
+-- Branch status parsing
 
 local function strip_branch_tracking_info(branch_part)
     return branch_part
@@ -71,6 +81,8 @@ local function parse_branch_status(line)
     }
 end
 
+-- File status parsing
+
 local function is_conflict_status(index_status, worktree_status, combined_status)
     return index_status == "U"
         or worktree_status == "U"
@@ -101,6 +113,8 @@ local function parse_file_status(line)
         is_copied = index_status == "C" or worktree_status == "C",
     }
 end
+
+-- Status aggregation
 
 local function create_empty_status()
     return {
@@ -151,6 +165,8 @@ local function finalize_status(status)
     return status
 end
 
+-- Git command wrappers
+
 local function get_status_lines(path)
     return run_git_command(path, {
         "status",
@@ -161,17 +177,19 @@ local function get_status_lines(path)
     })
 end
 
-local function get_log_lines(path)
+local function get_log_lines(path, limit)
     return run_git_command(path, {
         "log",
         "--oneline",
         "--decorate",
         "-n",
-        "8",
+        tostring(limit or 8),
     }, {
         allow_error = true,
     })
 end
+
+-- Status application
 
 local function apply_branch_status(status, line)
     local branch_status = parse_branch_status(line)
@@ -186,6 +204,8 @@ local function apply_file_status(status, line)
 
     update_status_counts(status, file_status)
 end
+
+-- Preview formatting
 
 local function build_preview_lines(status_lines, log_lines)
     local lines = {}
@@ -216,10 +236,25 @@ local function build_preview_lines(status_lines, log_lines)
     return lines
 end
 
+-- Public API
+
+--- Normalizes a path to an absolute path without a trailing slash.
+---
+--- When `path` is nil, the current working directory is used.
+---
+--- @param path string|nil Path to normalize.
+--- @return string normalized_path Absolute path without a trailing slash.
 function Git.normalize_path(path)
     return normalize_path(path)
 end
 
+--- Returns the root directory of the Git repository containing `path`.
+---
+--- Returns nil when `path` is not inside a Git repository or when Git cannot
+--- resolve the repository root.
+---
+--- @param path string|nil Path inside a Git repository. Defaults to the current working directory.
+--- @return string|nil git_root Absolute normalized Git root path.
 function Git.get_root(path)
     local result = run_git_command(path, {
         "rev-parse",
@@ -235,10 +270,35 @@ function Git.get_root(path)
     return normalize_path(result[1])
 end
 
+--- Returns whether `path` is inside a Git repository.
+---
+--- @param path string|nil Path to check. Defaults to the current working directory.
+--- @return boolean is_repository True when Git can resolve a repository root.
 function Git.is_repository(path)
     return Git.get_root(path) ~= nil
 end
 
+--- Returns parsed repository status information.
+---
+--- The status is based on `git status --short --branch`.
+---
+--- Returned table fields:
+--- - `branch`: current branch name, `"detached"`, or nil
+--- - `is_dirty`: whether the repository has staged, changed, untracked, or conflicted files
+--- - `changed_count`: number of changed files in the working tree
+--- - `staged_count`: number of staged files
+--- - `untracked_count`: number of untracked files
+--- - `conflict_count`: number of conflicted files
+--- - `added_count`: number of added files
+--- - `modified_count`: number of modified files
+--- - `deleted_count`: number of deleted files
+--- - `renamed_count`: number of renamed files
+--- - `copied_count`: number of copied files
+--- - `ahead`: number of commits ahead of upstream
+--- - `behind`: number of commits behind upstream
+---
+--- @param path string|nil Path inside a Git repository. Defaults to the current working directory.
+--- @return table status Parsed repository status.
 function Git.get_status(path)
     local result = get_status_lines(path)
     local status = create_empty_status()
@@ -258,17 +318,24 @@ function Git.get_status(path)
     return finalize_status(status)
 end
 
-function Git.get_preview_data(path)
-    return {
-        status_lines = get_status_lines(path) or {},
-        log_lines = get_log_lines(path) or {},
-    }
-end
+--- Builds preview lines for a Git repository.
+---
+--- The preview contains raw `git status --short --branch` output and recent
+--- commits from `git log --oneline --decorate`.
+---
+--- Options:
+--- - `commit_limit`: maximum number of commits shown in the preview. Defaults to 8.
+---
+--- @param path string|nil Path inside a Git repository. Defaults to the current working directory.
+--- @param options table|nil Preview options.
+--- @return string[] lines Preview lines.
+function Git.get_preview(path, options)
+    options = options or {}
 
-function Git.get_preview(path)
-    local preview_data = Git.get_preview_data(path)
+    local status_lines = get_status_lines(path) or {}
+    local log_lines = get_log_lines(path, options.commit_limit or 8) or {}
 
-    return build_preview_lines(preview_data.status_lines, preview_data.log_lines)
+    return build_preview_lines(status_lines, log_lines)
 end
 
 return Git
